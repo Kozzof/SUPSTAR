@@ -9,6 +9,7 @@ import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import type { GoogleProfileData } from './strategies/google.strategy';
 
 export interface PublicUser {
   id: string;
@@ -37,7 +38,9 @@ export class AuthService {
   async register(
     dto: RegisterDto,
   ): Promise<AuthResponse> {
-    const passwordHash = await argon2.hash(dto.password);
+    const passwordHash = await argon2.hash(
+      dto.password,
+    );
 
     const user =
       await this.usersService.createLocalUser({
@@ -81,7 +84,29 @@ export class AuthService {
     return this.createAuthResponse(user);
   }
 
-  getCurrentUser(user: User): PublicUser {
+  async loginWithGoogle(
+    profile: GoogleProfileData,
+  ): Promise<AuthResponse> {
+    const user =
+      await this.usersService.findOrCreateGoogleUser({
+        subject: profile.subject,
+        email: profile.email,
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+      });
+
+    if (!user.isActive) {
+      throw new UnauthorizedException(
+        'Ce compte utilisateur est désactivé.',
+      );
+    }
+
+    return this.createAuthResponse(user);
+  }
+
+  getCurrentUser(
+    user: User,
+  ): PublicUser {
     return this.toPublicUser(user);
   }
 

@@ -27,10 +27,16 @@ import {
 } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import type { GoogleProfileData } from './strategies/google.strategy';
 
 interface AuthenticatedRequest extends Request {
   user: User;
+}
+
+interface GoogleAuthenticatedRequest extends Request {
+  user: GoogleProfileData;
 }
 
 @ApiTags('Authentication')
@@ -75,6 +81,28 @@ export class AuthController {
     @Body() dto: LoginDto,
   ): Promise<AuthResponse> {
     return this.authService.login(dto);
+  }
+
+  @Get('google')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({
+    summary: 'Démarrer la connexion avec Google',
+  })
+  googleLogin(): void {
+    // Passport redirige automatiquement vers Google.
+  }
+
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({
+    summary: 'Traiter le retour OAuth2 de Google',
+  })
+  googleCallback(
+    @Req() request: GoogleAuthenticatedRequest,
+  ): Promise<AuthResponse> {
+    return this.authService.loginWithGoogle(
+      request.user,
+    );
   }
 
   @Get('me')

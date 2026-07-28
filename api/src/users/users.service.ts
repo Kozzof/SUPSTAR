@@ -16,6 +16,13 @@ interface CreateLocalUserData {
   passwordHash: string;
 }
 
+interface GoogleUserData {
+  subject: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -31,6 +38,8 @@ export class UsersService {
       displayName: data.displayName,
       passwordHash: data.passwordHash,
       avatarUrl: null,
+      oauthProvider: null,
+      oauthSubject: null,
       travelPreferences: {},
       isActive: true,
       emailVerifiedAt: null,
@@ -45,6 +54,77 @@ export class UsersService {
       ) {
         throw new ConflictException(
           'Un compte existe déjà avec cette adresse e-mail.',
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  async findOrCreateGoogleUser(
+    data: GoogleUserData,
+  ): Promise<User> {
+    const normalizedEmail = data.email.toLowerCase();
+
+    const userByGoogleIdentity =
+      await this.usersRepository.findOne({
+        where: {
+          oauthProvider: 'google',
+          oauthSubject: data.subject,
+        },
+      });
+
+    if (userByGoogleIdentity) {
+      return userByGoogleIdentity;
+    }
+
+    const userByEmail = await this.usersRepository.findOne({
+      where: {
+        email: normalizedEmail,
+      },
+    });
+
+    if (userByEmail) {
+      if (
+        userByEmail.oauthProvider &&
+        userByEmail.oauthProvider !== 'google'
+      ) {
+        throw new ConflictException(
+          'Ce compte est déjà associé à un autre fournisseur OAuth.',
+        );
+      }
+
+      userByEmail.oauthProvider = 'google';
+      userByEmail.oauthSubject = data.subject;
+      userByEmail.avatarUrl =
+        userByEmail.avatarUrl ?? data.avatarUrl;
+      userByEmail.emailVerifiedAt =
+        userByEmail.emailVerifiedAt ?? new Date();
+
+      return this.usersRepository.save(userByEmail);
+    }
+
+    const newUser = this.usersRepository.create({
+      email: normalizedEmail,
+      displayName: data.displayName,
+      passwordHash: null,
+      avatarUrl: data.avatarUrl,
+      oauthProvider: 'google',
+      oauthSubject: data.subject,
+      travelPreferences: {},
+      isActive: true,
+      emailVerifiedAt: new Date(),
+    });
+
+    try {
+      return await this.usersRepository.save(newUser);
+    } catch (error: unknown) {
+      if (
+        error instanceof QueryFailedError &&
+        this.isUniqueConstraintViolation(error)
+      ) {
+        throw new ConflictException(
+          'Cette identité Google est déjà utilisée.',
         );
       }
 

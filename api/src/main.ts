@@ -31,7 +31,15 @@ async function bootstrap() {
       'API de la plateforme collaborative de recommandations SUPSTAR',
     )
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+       bearerFormat: 'JWT',
+       in: 'header',
+      },
+      'access-token',
+    )
     .build();
 
   const swaggerDocument = SwaggerModule.createDocument(

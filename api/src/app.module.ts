@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { PlacesModule } from './places/places.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { PlaceStatusesModule } from './place-statuses/place-statuses.module';
 
 @Module({
   imports: [
@@ -49,6 +50,8 @@ import { ReviewsModule } from './reviews/reviews.module';
     PlacesModule,
 
     ReviewsModule,
+
+    PlaceStatusesModule,
   ],
 
   controllers: [AppController],

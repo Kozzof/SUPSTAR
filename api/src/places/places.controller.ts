@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -28,9 +29,13 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
 import { CreatePlaceDto } from './dto/create-place.dto';
+import { SearchPlacesDto } from './dto/search-places.dto';
 import { UpdatePlaceDto } from './dto/update-place.dto';
 import { Place } from './entities/place.entity';
-import { PlacesService } from './places.service';
+import {
+  PlacesService,
+  SearchPlacesResult,
+} from './places.service';
 
 interface AuthenticatedRequest extends Request {
   user: User;
@@ -47,11 +52,11 @@ export class PlacesController {
 
   @Post()
   @ApiOperation({
-    summary: 'Créer un nouveau lieu',
+    summary: 'Créer un lieu',
   })
   @ApiCreatedResponse({
     description:
-      'Le lieu a été créé avec succès.',
+      'Lieu créé avec succès.',
     type: Place,
   })
   @ApiUnauthorizedResponse({
@@ -59,8 +64,10 @@ export class PlacesController {
       'Jeton JWT absent, invalide ou expiré.',
   })
   create(
-    @Req() request: AuthenticatedRequest,
-    @Body() dto: CreatePlaceDto,
+    @Req()
+    request: AuthenticatedRequest,
+    @Body()
+    dto: CreatePlaceDto,
   ): Promise<Place> {
     return this.placesService.create(
       request.user.id,
@@ -70,58 +77,77 @@ export class PlacesController {
 
   @Get()
   @ApiOperation({
-    summary: 'Afficher tous les lieux',
+    summary:
+      'Rechercher et filtrer les lieux',
   })
   @ApiOkResponse({
     description:
-      'Liste des lieux enregistrés.',
-    type: [Place],
+      'Résultats paginés de la recherche.',
   })
-  findAll(): Promise<Place[]> {
-    return this.placesService.findAll();
+  search(
+    @Req()
+    request: AuthenticatedRequest,
+    @Query()
+    dto: SearchPlacesDto,
+  ): Promise<SearchPlacesResult> {
+    return this.placesService.search(
+      request.user.id,
+      dto,
+    );
   }
 
   @Get(':id')
   @ApiOperation({
     summary:
-      'Afficher un lieu par son identifiant',
+      'Afficher un lieu',
   })
   @ApiOkResponse({
-    description:
-      'Informations du lieu demandé.',
     type: Place,
   })
   @ApiNotFoundResponse({
-    description: 'Lieu introuvable.',
+    description:
+      'Lieu introuvable.',
   })
   findOne(
-    @Param('id', new ParseUUIDPipe())
+    @Param(
+      'id',
+      new ParseUUIDPipe(),
+    )
     id: string,
   ): Promise<Place> {
-    return this.placesService.findOne(id);
+    return this.placesService.findOne(
+      id,
+    );
   }
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Modifier un lieu',
+    summary:
+      'Modifier un lieu créé par l’utilisateur',
   })
   @ApiOkResponse({
     description:
-      'Le lieu a été modifié avec succès.',
+      'Lieu modifié avec succès.',
     type: Place,
-  })
-  @ApiNotFoundResponse({
-    description: 'Lieu introuvable.',
   })
   @ApiForbiddenResponse({
     description:
       "L'utilisateur n'est pas le créateur du lieu.",
   })
+  @ApiNotFoundResponse({
+    description:
+      'Lieu introuvable.',
+  })
   update(
-    @Param('id', new ParseUUIDPipe())
+    @Param(
+      'id',
+      new ParseUUIDPipe(),
+    )
     id: string,
-    @Req() request: AuthenticatedRequest,
-    @Body() dto: UpdatePlaceDto,
+    @Req()
+    request: AuthenticatedRequest,
+    @Body()
+    dto: UpdatePlaceDto,
   ): Promise<Place> {
     return this.placesService.update(
       id,
@@ -131,25 +157,33 @@ export class PlacesController {
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(
+    HttpStatus.NO_CONTENT,
+  )
   @ApiOperation({
-    summary: 'Supprimer un lieu',
+    summary:
+      'Supprimer un lieu créé par l’utilisateur',
   })
   @ApiNoContentResponse({
     description:
-      'Le lieu a été supprimé avec succès.',
-  })
-  @ApiNotFoundResponse({
-    description: 'Lieu introuvable.',
+      'Lieu supprimé avec succès.',
   })
   @ApiForbiddenResponse({
     description:
       "L'utilisateur n'est pas le créateur du lieu.",
   })
+  @ApiNotFoundResponse({
+    description:
+      'Lieu introuvable.',
+  })
   remove(
-    @Param('id', new ParseUUIDPipe())
+    @Param(
+      'id',
+      new ParseUUIDPipe(),
+    )
     id: string,
-    @Req() request: AuthenticatedRequest,
+    @Req()
+    request: AuthenticatedRequest,
   ): Promise<void> {
     return this.placesService.remove(
       id,

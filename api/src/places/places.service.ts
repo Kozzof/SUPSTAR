@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -34,6 +35,40 @@ export class PlacesService {
     userId: string,
     dto: CreatePlaceDto,
   ): Promise<Place> {
+    const duplicate = await this.placesRepository
+      .createQueryBuilder('place')
+      .where(
+        'LOWER(place.name) = LOWER(:name)',
+        {
+          name: dto.name.trim(),
+        },
+      )
+      .andWhere(
+        'LOWER(place.address) = LOWER(:address)',
+        {
+          address: dto.address.trim(),
+        },
+      )
+      .andWhere(
+        'LOWER(place.city) = LOWER(:city)',
+        {
+          city: dto.city.trim(),
+        },
+      )
+      .andWhere(
+        'LOWER(place.country) = LOWER(:country)',
+        {
+          country: dto.country.trim(),
+        },
+      )
+      .getOne();
+
+    if (duplicate) {
+      throw new ConflictException(
+        'Ce lieu existe déjà.',
+      );
+    }
+
     const location: GeoPoint = {
       type: 'Point',
       coordinates: [
@@ -365,6 +400,70 @@ export class PlacesService {
       place,
       userId,
     );
+
+    if (
+      dto.name !== undefined ||
+      dto.address !== undefined ||
+      dto.city !== undefined ||
+      dto.country !== undefined
+    ) {
+      const name =
+        dto.name?.trim() ??
+        place.name;
+
+      const address =
+        dto.address?.trim() ??
+        place.address;
+
+      const city =
+        dto.city?.trim() ??
+        place.city;
+
+      const country =
+        dto.country?.trim() ??
+        place.country;
+
+      const duplicate =
+        await this.placesRepository
+          .createQueryBuilder('other')
+          .where(
+            'other.id != :id',
+            {
+              id,
+            },
+          )
+          .andWhere(
+            'LOWER(other.name) = LOWER(:name)',
+            {
+              name,
+            },
+          )
+          .andWhere(
+            'LOWER(other.address) = LOWER(:address)',
+            {
+              address,
+            },
+          )
+          .andWhere(
+            'LOWER(other.city) = LOWER(:city)',
+            {
+              city,
+            },
+          )
+          .andWhere(
+            'LOWER(other.country) = LOWER(:country)',
+            {
+              country,
+            },
+          )
+          .getOne();
+
+      if (duplicate) {
+        throw new ConflictException(
+          'Ce lieu existe déjà.',
+        );
+      }
+    }
 
     if (dto.name !== undefined) {
       place.name =

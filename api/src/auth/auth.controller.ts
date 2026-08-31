@@ -6,24 +6,27 @@ import {
   HttpStatus,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ApiBearerAuth,
-  ApiConflictResponse,
-  ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type {
+  Request,
+  Response,
+} from 'express';
 
 import { User } from '../users/entities/user.entity';
-import {
-  AuthService,
-  type AuthResponse,
-  type PublicUser,
+import { AuthService } from './auth.service';
+import type {
+  AuthResponse,
+  PublicUser,
 } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -31,7 +34,7 @@ import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { GoogleProfileData } from './strategies/google.strategy';
 
-interface AuthenticatedRequest extends Request {
+interface JwtAuthenticatedRequest extends Request {
   user: User;
 }
 
@@ -44,19 +47,12 @@ interface GoogleAuthenticatedRequest extends Request {
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post('register')
   @ApiOperation({
-    summary: 'Créer un compte utilisateur',
-  })
-  @ApiCreatedResponse({
-    description:
-      'Le compte a été créé et un jeton JWT a été généré.',
-  })
-  @ApiConflictResponse({
-    description:
-      'Un compte existe déjà avec cette adresse e-mail.',
+    summary: 'Créer un compte local',
   })
   register(
     @Body() dto: RegisterDto,
@@ -67,15 +63,14 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Se connecter avec un compte local',
+    summary:
+      'Se connecter avec e-mail et mot de passe',
   })
   @ApiOkResponse({
-    description:
-      'Connexion réussie et jeton JWT généré.',
+    description: 'Connexion réussie.',
   })
   @ApiUnauthorizedResponse({
-    description:
-      'Adresse e-mail ou mot de passe incorrect.',
+    description: 'Identifiants invalides.',
   })
   login(
     @Body() dto: LoginDto,
@@ -86,22 +81,35 @@ export class AuthController {
   @Get('google')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({
-    summary: 'Démarrer la connexion avec Google',
+    summary: 'Se connecter avec Google',
   })
   googleLogin(): void {
-    // Passport redirige automatiquement vers Google.
+    // Passport redirige vers Google.
   }
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({
-    summary: 'Traiter le retour OAuth2 de Google',
+    summary: 'Callback Google OAuth2',
   })
-  googleCallback(
+  async googleCallback(
     @Req() request: GoogleAuthenticatedRequest,
-  ): Promise<AuthResponse> {
-    return this.authService.loginWithGoogle(
-      request.user,
+    @Res() response: Response,
+  ): Promise<void> {
+    const auth =
+      await this.authService.loginWithGoogle(
+        request.user,
+      );
+
+    const frontendUrl =
+      this.configService.get<string>(
+        'FRONTEND_URL',
+      ) ?? 'http://localhost:5173';
+
+    response.redirect(
+      `${frontendUrl}/oauth/callback#accessToken=${encodeURIComponent(
+        auth.accessToken,
+      )}`,
     );
   }
 
@@ -109,18 +117,18 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: "Récupérer l'utilisateur connecté",
+    summary:
+      'Afficher l’utilisateur connecté',
   })
   @ApiOkResponse({
-    description:
-      "Informations de l'utilisateur connecté.",
+    description: 'Utilisateur connecté.',
   })
   @ApiUnauthorizedResponse({
     description:
       'Jeton JWT absent, invalide ou expiré.',
   })
   getCurrentUser(
-    @Req() request: AuthenticatedRequest,
+    @Req() request: JwtAuthenticatedRequest,
   ): PublicUser {
     return this.authService.getCurrentUser(
       request.user,

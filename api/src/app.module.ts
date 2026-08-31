@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { PlacesModule } from './places/places.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { PlaceStatusesModule } from './place-statuses/place-statuses.module';
+import { ListsModule } from './lists/lists.module';
+import { DataTransferModule } from './data-transfer/data-transfer.module';
 
 @Module({
   imports: [
@@ -52,6 +54,10 @@ import { PlaceStatusesModule } from './place-statuses/place-statuses.module';
     ReviewsModule,
 
     PlaceStatusesModule,
+
+    ListsModule,
+
+    DataTransferModule,
   ],
 
   controllers: [AppController],

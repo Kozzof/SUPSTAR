@@ -28,13 +28,15 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
 import { AddMemberDto } from './dto/add-member.dto';
 import { AddPlaceDto } from './dto/add-place.dto';
+import { CreateListCommentDto } from './dto/create-list-comment.dto';
 import { CreateListDto } from './dto/create-list.dto';
 import { SearchListPlacesDto } from './dto/search-list-places.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { ListsService } from './lists.service';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest
+  extends Request {
   user: User;
 }
 
@@ -94,6 +96,85 @@ export class ListsController {
     );
   }
 
+  @Get(':listId/comments')
+  @ApiOperation({
+    summary:
+      'Afficher les commentaires d’une liste',
+  })
+  findComments(
+    @Param(
+      'listId',
+      new ParseUUIDPipe(),
+    )
+    listId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.listsService.findComments(
+      request.user.id,
+      listId,
+    );
+  }
+
+  @Post(':listId/comments')
+  @ApiOperation({
+    summary:
+      'Ajouter un commentaire à une liste',
+  })
+  @ApiForbiddenResponse({
+    description:
+      "L'utilisateur n'a pas la permission de commenter.",
+  })
+  addComment(
+    @Param(
+      'listId',
+      new ParseUUIDPipe(),
+    )
+    listId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body()
+    dto: CreateListCommentDto,
+  ) {
+    return this.listsService.addComment(
+      request.user.id,
+      listId,
+      dto,
+    );
+  }
+
+  @Delete(
+    ':listId/comments/:commentId',
+  )
+  @HttpCode(
+    HttpStatus.NO_CONTENT,
+  )
+  @ApiOperation({
+    summary:
+      'Supprimer un commentaire',
+  })
+  @ApiNoContentResponse({
+    description:
+      'Commentaire supprimé.',
+  })
+  removeComment(
+    @Param(
+      'listId',
+      new ParseUUIDPipe(),
+    )
+    listId: string,
+    @Param(
+      'commentId',
+      new ParseUUIDPipe(),
+    )
+    commentId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.listsService.removeComment(
+      request.user.id,
+      listId,
+      commentId,
+    );
+  }
+
   @Get(':listId')
   @ApiOperation({
     summary: 'Afficher une liste',
@@ -141,7 +222,9 @@ export class ListsController {
   }
 
   @Delete(':listId')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(
+    HttpStatus.NO_CONTENT,
+  )
   @ApiOperation({
     summary: 'Supprimer une liste',
   })
@@ -188,7 +271,9 @@ export class ListsController {
     );
   }
 
-  @Patch(':listId/members/:memberId')
+  @Patch(
+    ':listId/members/:memberId',
+  )
   @ApiOperation({
     summary:
       'Modifier le rôle d’un membre',
@@ -205,7 +290,8 @@ export class ListsController {
     )
     memberId: string,
     @Req() request: AuthenticatedRequest,
-    @Body() dto: UpdateMemberRoleDto,
+    @Body()
+    dto: UpdateMemberRoleDto,
   ) {
     return this.listsService.updateMemberRole(
       request.user.id,
@@ -215,8 +301,12 @@ export class ListsController {
     );
   }
 
-  @Delete(':listId/members/:memberId')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(
+    ':listId/members/:memberId',
+  )
+  @HttpCode(
+    HttpStatus.NO_CONTENT,
+  )
   @ApiOperation({
     summary:
       'Retirer un membre d’une liste',
@@ -262,8 +352,12 @@ export class ListsController {
     );
   }
 
-  @Delete(':listId/places/:placeId')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(
+    ':listId/places/:placeId',
+  )
+  @HttpCode(
+    HttpStatus.NO_CONTENT,
+  )
   @ApiOperation({
     summary:
       'Retirer un lieu d’une liste',

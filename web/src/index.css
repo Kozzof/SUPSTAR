@@ -868,3 +868,46 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+.list-comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  margin-bottom: 20px;
+}
+
+.list-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.list-comment {
+  padding: 14px;
+
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.list-comment-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.list-comment-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.list-comment-header span {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.list-comment p {
+  margin-bottom: 0;
+}

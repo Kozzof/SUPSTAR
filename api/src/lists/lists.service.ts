@@ -14,10 +14,12 @@ import { Place } from '../places/entities/place.entity';
 import { User } from '../users/entities/user.entity';
 import { AddMemberDto } from './dto/add-member.dto';
 import { AddPlaceDto } from './dto/add-place.dto';
+import { CreateListCommentDto } from './dto/create-list-comment.dto';
 import { CreateListDto } from './dto/create-list.dto';
 import { SearchListPlacesDto } from './dto/search-list-places.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { ListComment } from './entities/list-comment.entity';
 import {
   ListMember,
   ListMemberRole,
@@ -37,6 +39,9 @@ export class ListsService {
     @InjectRepository(ListPlace)
     private readonly listPlacesRepository: Repository<ListPlace>,
 
+    @InjectRepository(ListComment)
+    private readonly commentsRepository: Repository<ListComment>,
+
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
 
@@ -52,26 +57,30 @@ export class ListsService {
   ): Promise<PlaceList> {
     return this.dataSource.transaction(
       async (manager) => {
-        const list = manager.create(PlaceList, {
-          createdById: userId,
-          name: dto.name.trim(),
-          description:
-            dto.description?.trim() || null,
-        });
-
-        const savedList = await manager.save(
+        const list = manager.create(
           PlaceList,
-          list,
-        );
-
-        const membership = manager.create(
-          ListMember,
           {
-            listId: savedList.id,
-            userId,
-            role: ListMemberRole.CREATOR,
+            createdById: userId,
+            name: dto.name.trim(),
+            description:
+              dto.description?.trim() ||
+              null,
           },
         );
+
+        const savedList =
+          await manager.save(
+            PlaceList,
+            list,
+          );
+
+        const membership =
+          manager.create(ListMember, {
+            listId: savedList.id,
+            userId,
+            role:
+              ListMemberRole.CREATOR,
+          });
 
         await manager.save(
           ListMember,
@@ -123,7 +132,9 @@ export class ListsService {
       );
 
     const list =
-      await this.findListOrFail(listId);
+      await this.findListOrFail(
+        listId,
+      );
 
     const members =
       await this.membersRepository
@@ -167,12 +178,19 @@ export class ListsService {
         },
       });
 
+    const comments =
+      await this.findComments(
+        userId,
+        listId,
+      );
+
     return {
       ...list,
       currentUserRole:
         membership.role,
       members,
       places,
+      comments,
     };
   }
 
@@ -187,17 +205,22 @@ export class ListsService {
     );
 
     const list =
-      await this.findListOrFail(listId);
+      await this.findListOrFail(
+        listId,
+      );
 
     if (dto.name !== undefined) {
-      list.name = dto.name.trim();
+      list.name =
+        dto.name.trim();
     }
 
     if (
-      dto.description !== undefined
+      dto.description !==
+      undefined
     ) {
       list.description =
-        dto.description.trim() || null;
+        dto.description.trim() ||
+        null;
     }
 
     return this.listsRepository.save(
@@ -215,7 +238,9 @@ export class ListsService {
     );
 
     const list =
-      await this.findListOrFail(listId);
+      await this.findListOrFail(
+        listId,
+      );
 
     await this.listsRepository.remove(
       list,
@@ -238,7 +263,8 @@ export class ListsService {
         .where(
           'LOWER(user.email) = LOWER(:email)',
           {
-            email: dto.email.trim(),
+            email:
+              dto.email.trim(),
           },
         )
         .andWhere(
@@ -368,9 +394,11 @@ export class ListsService {
     );
 
     const place =
-      await this.placesRepository.findOneBy({
-        id: dto.placeId,
-      });
+      await this.placesRepository.findOneBy(
+        {
+          id: dto.placeId,
+        },
+      );
 
     if (!place) {
       throw new NotFoundException(
@@ -467,7 +495,8 @@ export class ListsService {
         )
         `,
         {
-          search: `%${dto.search.trim()}%`,
+          search:
+            `%${dto.search.trim()}%`,
         },
       );
     }
@@ -493,7 +522,8 @@ export class ListsService {
     }
 
     if (
-      dto.minRating !== undefined
+      dto.minRating !==
+      undefined
     ) {
       query.andWhere(
         'place.ratingAverage >= :minRating',
@@ -533,13 +563,123 @@ export class ListsService {
       .getMany();
   }
 
+  async findComments(
+    userId: string,
+    listId: string,
+  ): Promise<ListComment[]> {
+    await this.requireMembership(
+      listId,
+      userId,
+    );
+
+    return this.commentsRepository
+      .createQueryBuilder('comment')
+      .innerJoinAndSelect(
+        'comment.user',
+        'user',
+      )
+      .select([
+        'comment.id',
+        'comment.listId',
+        'comment.userId',
+        'comment.comment',
+        'comment.createdAt',
+        'comment.updatedAt',
+        'user.id',
+        'user.displayName',
+        'user.avatarUrl',
+      ])
+      .where(
+        'comment.listId = :listId',
+        {
+          listId,
+        },
+      )
+      .orderBy(
+        'comment.createdAt',
+        'DESC',
+      )
+      .getMany();
+  }
+
+  async addComment(
+    userId: string,
+    listId: string,
+    dto: CreateListCommentDto,
+  ): Promise<ListComment> {
+    await this.requireCommentPermission(
+      listId,
+      userId,
+    );
+
+    const comment =
+      this.commentsRepository.create({
+        listId,
+        userId,
+        comment:
+          dto.comment.trim(),
+      });
+
+    return this.commentsRepository.save(
+      comment,
+    );
+  }
+
+  async removeComment(
+    userId: string,
+    listId: string,
+    commentId: string,
+  ): Promise<void> {
+    const membership =
+      await this.requireMembership(
+        listId,
+        userId,
+      );
+
+    const comment =
+      await this.commentsRepository.findOne({
+        where: {
+          id: commentId,
+          listId,
+        },
+      });
+
+    if (!comment) {
+      throw new NotFoundException(
+        'Commentaire introuvable.',
+      );
+    }
+
+    const isAuthor =
+      comment.userId === userId;
+
+    const isCreator =
+      membership.role ===
+      ListMemberRole.CREATOR;
+
+    if (
+      !isAuthor &&
+      !isCreator
+    ) {
+      throw new ForbiddenException(
+        "Vous n'êtes pas autorisé à supprimer ce commentaire.",
+      );
+    }
+
+    await this.commentsRepository.remove(
+      comment,
+    );
+  }
+
   private async findListOrFail(
     listId: string,
   ): Promise<PlaceList> {
     const list =
-      await this.listsRepository.findOneBy({
-        id: listId,
-      });
+      await this.listsRepository.findOneBy(
+        {
+          id: listId,
+        },
+      );
 
     if (!list) {
       throw new NotFoundException(
@@ -554,7 +694,9 @@ export class ListsService {
     listId: string,
     userId: string,
   ): Promise<ListMember> {
-    await this.findListOrFail(listId);
+    await this.findListOrFail(
+      listId,
+    );
 
     const membership =
       await this.membersRepository.findOne({
@@ -613,6 +755,35 @@ export class ListsService {
     ) {
       throw new ForbiddenException(
         'Seul le créateur de la liste peut effectuer cette action.',
+      );
+    }
+
+    return membership;
+  }
+
+  private async requireCommentPermission(
+    listId: string,
+    userId: string,
+  ): Promise<ListMember> {
+    const membership =
+      await this.requireMembership(
+        listId,
+        userId,
+      );
+
+    const allowedRoles = [
+      ListMemberRole.CREATOR,
+      ListMemberRole.EDITOR,
+      ListMemberRole.COMMENTER,
+    ];
+
+    if (
+      !allowedRoles.includes(
+        membership.role,
+      )
+    ) {
+      throw new ForbiddenException(
+        "Vous n'avez pas la permission de commenter cette liste.",
       );
     }
 

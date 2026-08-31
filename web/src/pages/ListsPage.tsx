@@ -39,10 +39,25 @@ interface ListPlace {
   place: Place;
 }
 
+interface ListComment {
+  id: string;
+  listId: string;
+  userId: string;
+  comment: string;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+}
+
 interface ListDetails extends PlaceList {
   currentUserRole: ListMemberRole;
   members: ListMember[];
   places: ListPlace[];
+  comments: ListComment[];
 }
 
 export default function ListsPage() {
@@ -71,6 +86,9 @@ export default function ListsPage() {
     useState('');
 
   const [search, setSearch] =
+    useState('');
+
+  const [comment, setComment] =
     useState('');
 
   const [error, setError] =
@@ -243,6 +261,7 @@ export default function ListsPage() {
       );
 
       setSelectedList(null);
+
       await loadLists();
     } catch (err) {
       setError(
@@ -421,6 +440,83 @@ export default function ListsPage() {
     }
   }
 
+  async function addComment(
+    event: FormEvent,
+  ) {
+    event.preventDefault();
+
+    if (
+      !selectedList ||
+      !comment.trim()
+    ) {
+      return;
+    }
+
+    setError('');
+
+    try {
+      await apiRequest(
+        `/lists/${selectedList.id}/comments`,
+        {
+          method: 'POST',
+          body: {
+            comment:
+              comment.trim(),
+          },
+        },
+      );
+
+      setComment('');
+
+      await openList(
+        selectedList.id,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Impossible d’ajouter le commentaire.',
+      );
+    }
+  }
+
+  async function removeComment(
+    commentId: string,
+  ) {
+    if (!selectedList) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        'Supprimer ce commentaire ?',
+      )
+    ) {
+      return;
+    }
+
+    setError('');
+
+    try {
+      await apiRequest(
+        `/lists/${selectedList.id}/comments/${commentId}`,
+        {
+          method: 'DELETE',
+        },
+      );
+
+      await openList(
+        selectedList.id,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Impossible de supprimer le commentaire.',
+      );
+    }
+  }
+
   const filteredPlaces =
     selectedList?.places.filter(
       ({ place }) => {
@@ -458,6 +554,14 @@ export default function ListsPage() {
       'creator' ||
     selectedList?.currentUserRole ===
       'editor';
+
+  const canComment =
+    selectedList?.currentUserRole ===
+      'creator' ||
+    selectedList?.currentUserRole ===
+      'editor' ||
+    selectedList?.currentUserRole ===
+      'commenter';
 
   const isCreator =
     selectedList?.currentUserRole ===
@@ -771,6 +875,105 @@ export default function ListsPage() {
                     <p>
                       Aucun lieu dans
                       cette liste.
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section className="panel">
+                <h2>Commentaires</h2>
+
+                {canComment && (
+                  <form
+                    className="list-comment-form"
+                    onSubmit={addComment}
+                  >
+                    <textarea
+                      rows={3}
+                      placeholder="Écrire un commentaire..."
+                      value={comment}
+                      onChange={(event) =>
+                        setComment(
+                          event.target.value,
+                        )
+                      }
+                      required
+                    />
+
+                    <button type="submit">
+                      Publier
+                    </button>
+                  </form>
+                )}
+
+                <div className="list-comments">
+                  {selectedList.comments.map(
+                    (listComment) => (
+                      <article
+                        key={listComment.id}
+                        className="list-comment"
+                      >
+                        <div className="list-comment-header">
+                          <div>
+                            <strong>
+                              {
+                                listComment
+                                  .user
+                                  .displayName
+                              }
+                            </strong>
+
+                            <span>
+                              {new Date(
+                                listComment.createdAt,
+                              ).toLocaleString(
+                                'fr-FR',
+                              )}
+                            </span>
+                          </div>
+
+                          {(isCreator ||
+                            selectedList.members.some(
+                              (member) =>
+                                member.userId ===
+                                  listComment.userId &&
+                                member.userId ===
+                                  selectedList.members.find(
+                                    (
+                                      currentMember,
+                                    ) =>
+                                      currentMember.role ===
+                                      selectedList.currentUserRole,
+                                  )
+                                    ?.userId,
+                            )) && (
+                            <button
+                              type="button"
+                              className="small-danger-button"
+                              onClick={() =>
+                                void removeComment(
+                                  listComment.id,
+                                )
+                              }
+                            >
+                              Supprimer
+                            </button>
+                          )}
+                        </div>
+
+                        <p>
+                          {
+                            listComment.comment
+                          }
+                        </p>
+                      </article>
+                    ),
+                  )}
+
+                  {selectedList.comments.length ===
+                    0 && (
+                    <p>
+                      Aucun commentaire.
                     </p>
                   )}
                 </div>

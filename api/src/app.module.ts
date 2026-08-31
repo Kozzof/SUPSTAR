@@ -10,6 +10,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { PlaceStatusesModule } from './place-statuses/place-statuses.module';
 import { ListsModule } from './lists/lists.module';
 import { DataTransferModule } from './data-transfer/data-transfer.module';
+import { PlacePhotosModule } from './place-photos/place-photos.module';
 
 @Module({
   imports: [
@@ -58,6 +59,8 @@ import { DataTransferModule } from './data-transfer/data-transfer.module';
     ListsModule,
 
     DataTransferModule,
+
+    PlacePhotosModule,
   ],
 
   controllers: [AppController],

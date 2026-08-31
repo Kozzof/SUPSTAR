@@ -77,7 +77,7 @@ GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
 FRONTEND_URL=http://localhost:5173
 ```
 
-Ne jamais versionner le véritable fichier `.env`.
+
 
 ## Lancement avec Docker
 

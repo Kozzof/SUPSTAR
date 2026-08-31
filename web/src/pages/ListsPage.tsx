@@ -11,6 +11,7 @@ import type {
   Place,
   PlaceList,
   SearchPlacesResult,
+  User,
 } from '../types';
 
 interface ListSummary {
@@ -67,8 +68,14 @@ export default function ListsPage() {
   const [selectedList, setSelectedList] =
     useState<ListDetails | null>(null);
 
+  const [displayedPlaces, setDisplayedPlaces] =
+    useState<Place[]>([]);
+
   const [availablePlaces, setAvailablePlaces] =
     useState<Place[]>([]);
+
+  const [currentUserId, setCurrentUserId] =
+    useState('');
 
   const [name, setName] =
     useState('');
@@ -85,7 +92,19 @@ export default function ListsPage() {
   const [placeId, setPlaceId] =
     useState('');
 
-  const [search, setSearch] =
+  const [placeSearch, setPlaceSearch] =
+    useState('');
+
+  const [placeCategory, setPlaceCategory] =
+    useState('');
+
+  const [placeCity, setPlaceCity] =
+    useState('');
+
+  const [placeTags, setPlaceTags] =
+    useState('');
+
+  const [placeMinRating, setPlaceMinRating] =
     useState('');
 
   const [comment, setComment] =
@@ -131,9 +150,31 @@ export default function ListsPage() {
           response.items,
         );
       } catch {
-        // La page reste utilisable sans ce sélecteur.
+        // La page reste utilisable sans le sélecteur.
       }
     }, []);
+
+  const loadCurrentUser =
+    useCallback(async () => {
+      try {
+        const user =
+          await apiRequest<User>(
+            '/auth/me',
+          );
+
+        setCurrentUserId(user.id);
+      } catch {
+        // La route est protégée par l'authentification globale.
+      }
+    }, []);
+
+  function resetPlaceFiltersState() {
+    setPlaceSearch('');
+    setPlaceCategory('');
+    setPlaceCity('');
+    setPlaceTags('');
+    setPlaceMinRating('');
+  }
 
   async function openList(
     listId: string,
@@ -147,7 +188,15 @@ export default function ListsPage() {
         );
 
       setSelectedList(response);
-      setSearch('');
+
+      setDisplayedPlaces(
+        response.places.map(
+          (listPlace) =>
+            listPlace.place,
+        ),
+      );
+
+      resetPlaceFiltersState();
     } catch (err) {
       setError(
         err instanceof Error
@@ -160,9 +209,11 @@ export default function ListsPage() {
   useEffect(() => {
     void loadLists();
     void loadAvailablePlaces();
+    void loadCurrentUser();
   }, [
     loadLists,
     loadAvailablePlaces,
+    loadCurrentUser,
   ]);
 
   async function createList(
@@ -261,6 +312,7 @@ export default function ListsPage() {
       );
 
       setSelectedList(null);
+      setDisplayedPlaces([]);
 
       await loadLists();
     } catch (err) {
@@ -338,6 +390,93 @@ export default function ListsPage() {
           : 'Impossible de retirer le lieu.',
       );
     }
+  }
+
+  async function searchListPlaces(
+    event: FormEvent,
+  ) {
+    event.preventDefault();
+
+    if (!selectedList) {
+      return;
+    }
+
+    setError('');
+
+    const params =
+      new URLSearchParams();
+
+    if (placeSearch.trim()) {
+      params.set(
+        'search',
+        placeSearch.trim(),
+      );
+    }
+
+    if (placeCategory.trim()) {
+      params.set(
+        'category',
+        placeCategory.trim(),
+      );
+    }
+
+    if (placeCity.trim()) {
+      params.set(
+        'city',
+        placeCity.trim(),
+      );
+    }
+
+    if (placeTags.trim()) {
+      params.set(
+        'tags',
+        placeTags.trim(),
+      );
+    }
+
+    if (placeMinRating) {
+      params.set(
+        'minRating',
+        placeMinRating,
+      );
+    }
+
+    const query =
+      params.toString();
+
+    try {
+      const places =
+        await apiRequest<Place[]>(
+          `/lists/${selectedList.id}/places${
+            query
+              ? `?${query}`
+              : ''
+          }`,
+        );
+
+      setDisplayedPlaces(places);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Impossible de rechercher les lieux.',
+      );
+    }
+  }
+
+  function resetPlaceFilters() {
+    if (!selectedList) {
+      return;
+    }
+
+    resetPlaceFiltersState();
+
+    setDisplayedPlaces(
+      selectedList.places.map(
+        (listPlace) =>
+          listPlace.place,
+      ),
+    );
   }
 
   async function addMember(
@@ -517,38 +656,6 @@ export default function ListsPage() {
     }
   }
 
-  const filteredPlaces =
-    selectedList?.places.filter(
-      ({ place }) => {
-        const term =
-          search
-            .trim()
-            .toLowerCase();
-
-        if (!term) {
-          return true;
-        }
-
-        return (
-          place.name
-            .toLowerCase()
-            .includes(term) ||
-          place.city
-            .toLowerCase()
-            .includes(term) ||
-          place.category
-            .toLowerCase()
-            .includes(term) ||
-          place.tags.some(
-            (tag) =>
-              tag
-                .toLowerCase()
-                .includes(term),
-          )
-        );
-      },
-    ) ?? [];
-
   const canEdit =
     selectedList?.currentUserRole ===
       'creator' ||
@@ -663,9 +770,7 @@ export default function ListsPage() {
                 )}
 
                 {lists.length === 0 && (
-                  <p>
-                    Aucune liste.
-                  </p>
+                  <p>Aucune liste.</p>
                 )}
               </div>
             )}
@@ -731,9 +836,7 @@ export default function ListsPage() {
                           setSelectedList({
                             ...selectedList,
                             name:
-                              event
-                                .target
-                                .value,
+                              event.target.value,
                           })
                         }
                       />
@@ -753,9 +856,7 @@ export default function ListsPage() {
                           setSelectedList({
                             ...selectedList,
                             description:
-                              event
-                                .target
-                                .value,
+                              event.target.value,
                           })
                         }
                       />
@@ -778,15 +879,110 @@ export default function ListsPage() {
                   Lieux de la liste
                 </h2>
 
-                <input
-                  placeholder="Rechercher dans la liste..."
-                  value={search}
-                  onChange={(event) =>
-                    setSearch(
-                      event.target.value,
-                    )
+                <form
+                  className="form"
+                  onSubmit={
+                    searchListPlaces
                   }
-                />
+                >
+                  <label>
+                    Recherche
+                    <input
+                      placeholder="Nom ou description"
+                      value={placeSearch}
+                      onChange={(event) =>
+                        setPlaceSearch(
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    Catégorie
+                    <input
+                      placeholder="Restaurant, musée..."
+                      value={placeCategory}
+                      onChange={(event) =>
+                        setPlaceCategory(
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    Ville
+                    <input
+                      placeholder="Paris"
+                      value={placeCity}
+                      onChange={(event) =>
+                        setPlaceCity(
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    Tags
+                    <input
+                      placeholder="culture, terrasse..."
+                      value={placeTags}
+                      onChange={(event) =>
+                        setPlaceTags(
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    Note minimale
+                    <select
+                      value={placeMinRating}
+                      onChange={(event) =>
+                        setPlaceMinRating(
+                          event.target.value,
+                        )
+                      }
+                    >
+                      <option value="">
+                        Toutes
+                      </option>
+                      <option value="1">
+                        1 ★
+                      </option>
+                      <option value="2">
+                        2 ★
+                      </option>
+                      <option value="3">
+                        3 ★
+                      </option>
+                      <option value="4">
+                        4 ★
+                      </option>
+                      <option value="5">
+                        5 ★
+                      </option>
+                    </select>
+                  </label>
+
+                  <div className="inline-form">
+                    <button type="submit">
+                      Rechercher
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={
+                        resetPlaceFilters
+                      }
+                    >
+                      Réinitialiser
+                    </button>
+                  </div>
+                </form>
 
                 {canEdit && (
                   <form
@@ -826,8 +1022,8 @@ export default function ListsPage() {
                 )}
 
                 <div className="list-places">
-                  {filteredPlaces.map(
-                    ({ place }) => (
+                  {displayedPlaces.map(
+                    (place) => (
                       <article
                         key={place.id}
                         className="list-place-row"
@@ -870,11 +1066,12 @@ export default function ListsPage() {
                     ),
                   )}
 
-                  {filteredPlaces.length ===
+                  {displayedPlaces.length ===
                     0 && (
                     <p>
-                      Aucun lieu dans
-                      cette liste.
+                      Aucun lieu ne
+                      correspond aux
+                      critères.
                     </p>
                   )}
                 </div>
@@ -917,8 +1114,7 @@ export default function ListsPage() {
                           <div>
                             <strong>
                               {
-                                listComment
-                                  .user
+                                listComment.user
                                   .displayName
                               }
                             </strong>
@@ -933,20 +1129,8 @@ export default function ListsPage() {
                           </div>
 
                           {(isCreator ||
-                            selectedList.members.some(
-                              (member) =>
-                                member.userId ===
-                                  listComment.userId &&
-                                member.userId ===
-                                  selectedList.members.find(
-                                    (
-                                      currentMember,
-                                    ) =>
-                                      currentMember.role ===
-                                      selectedList.currentUserRole,
-                                  )
-                                    ?.userId,
-                            )) && (
+                            listComment.userId ===
+                              currentUserId) && (
                             <button
                               type="button"
                               className="small-danger-button"
@@ -993,8 +1177,7 @@ export default function ListsPage() {
                       value={memberEmail}
                       onChange={(event) =>
                         setMemberEmail(
-                          event.target
-                            .value,
+                          event.target.value,
                         )
                       }
                       required
@@ -1045,8 +1228,7 @@ export default function ListsPage() {
 
                           <span>
                             {
-                              member.user
-                                .email
+                              member.user.email
                             }
                           </span>
                         </div>
@@ -1065,8 +1247,7 @@ export default function ListsPage() {
                                 ) =>
                                   void changeMemberRole(
                                     member.id,
-                                    event
-                                      .target
+                                    event.target
                                       .value as ListMemberRole,
                                   )
                                 }

@@ -29,6 +29,19 @@ interface PhotoForm {
   caption: string;
 }
 
+interface PlaceEditForm {
+  name: string;
+  address: string;
+  city: string;
+  country: string;
+  category: string;
+  description: string;
+  priceLevel: string;
+  tags: string;
+  latitude: string;
+  longitude: string;
+}
+
 export default function PlaceDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -66,11 +79,58 @@ export default function PlaceDetailsPage() {
       caption: '',
     });
 
+  const [editForm, setEditForm] =
+    useState<PlaceEditForm>({
+      name: '',
+      address: '',
+      city: '',
+      country: '',
+      category: '',
+      description: '',
+      priceLevel: '',
+      tags: '',
+      latitude: '',
+      longitude: '',
+    });
+
+  const [editingPlace, setEditingPlace] =
+    useState(false);
+
+  const [savingPlace, setSavingPlace] =
+    useState(false);
+
   const [savingReview, setSavingReview] =
     useState(false);
 
   const [savingPhoto, setSavingPhoto] =
     useState(false);
+
+  const fillEditForm = useCallback(
+    (targetPlace: Place) => {
+      setEditForm({
+        name: targetPlace.name,
+        address: targetPlace.address,
+        city: targetPlace.city,
+        country: targetPlace.country,
+        category: targetPlace.category,
+        description:
+          targetPlace.description ?? '',
+        priceLevel:
+          targetPlace.priceLevel !== null &&
+          targetPlace.priceLevel !== undefined
+            ? String(targetPlace.priceLevel)
+            : '',
+        tags: targetPlace.tags.join(', '),
+        latitude: String(
+          targetPlace.location.coordinates[1],
+        ),
+        longitude: String(
+          targetPlace.location.coordinates[0],
+        ),
+      });
+    },
+    [],
+  );
 
   const loadData = useCallback(async () => {
     if (!id) {
@@ -114,6 +174,8 @@ export default function PlaceDetailsPage() {
       setStatus(statusResponse);
       setPhotos(photosResponse);
       setCurrentUser(userResponse);
+
+      fillEditForm(placeResponse);
     } catch (err) {
       setError(
         err instanceof Error
@@ -123,7 +185,10 @@ export default function PlaceDetailsPage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [
+    id,
+    fillEditForm,
+  ]);
 
   useEffect(() => {
     void loadData();
@@ -137,6 +202,102 @@ export default function PlaceDetailsPage() {
 
   const isOwner =
     place?.createdById === currentUser?.id;
+
+  function startPlaceEdit() {
+    if (!place) {
+      return;
+    }
+
+    fillEditForm(place);
+    setEditingPlace(true);
+  }
+
+  function cancelPlaceEdit() {
+    if (place) {
+      fillEditForm(place);
+    }
+
+    setEditingPlace(false);
+  }
+
+  async function savePlace(
+    event: FormEvent,
+  ) {
+    event.preventDefault();
+
+    if (!id) {
+      return;
+    }
+
+    setSavingPlace(true);
+    setError('');
+
+    try {
+      const tags =
+        editForm.tags
+          .split(',')
+          .map(
+            (tag) =>
+              tag.trim(),
+          )
+          .filter(Boolean);
+
+      await apiRequest(
+        `/places/${id}`,
+        {
+          method: 'PATCH',
+          body: {
+            name:
+              editForm.name.trim(),
+
+            address:
+              editForm.address.trim(),
+
+            city:
+              editForm.city.trim(),
+
+            country:
+              editForm.country.trim(),
+
+            category:
+              editForm.category.trim(),
+
+            description:
+              editForm.description.trim(),
+
+            priceLevel:
+              editForm.priceLevel
+                ? Number(
+                    editForm.priceLevel,
+                  )
+                : undefined,
+
+            tags,
+
+            latitude: Number(
+              editForm.latitude,
+            ),
+
+            longitude: Number(
+              editForm.longitude,
+            ),
+          },
+        },
+      );
+
+      setEditingPlace(false);
+
+      await loadData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Impossible de modifier le lieu.',
+      );
+    } finally {
+      setSavingPlace(false);
+    }
+  }
 
   async function updateStatus(
     field:
@@ -449,60 +610,308 @@ export default function PlaceDetailsPage() {
       )}
 
       <section className="panel">
-        <h2>Informations</h2>
+        <div className="list-title-row">
+          <h2>Informations</h2>
 
-        <p>
-          {place.description}
-        </p>
-
-        <div className="place-meta">
-          <span>
-            <strong>Prix :</strong>{' '}
-            {place.priceLevel
-              ? '€'.repeat(
-                  place.priceLevel,
-                )
-              : 'Non renseigné'}
-          </span>
-
-          <span>
-            <strong>Note :</strong>{' '}
-            {place.ratingAverage.toFixed(1)}
-            /5
-          </span>
+          {isOwner &&
+            !editingPlace && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={
+                  startPlaceEdit
+                }
+              >
+                Modifier le lieu
+              </button>
+            )}
         </div>
 
-        {place.tags.length > 0 && (
-          <div className="tags">
-            {place.tags.map(
-              (tag) => (
-                <span
-                  key={tag}
-                  className="tag"
-                >
-                  {tag}
-                </span>
-              ),
-            )}
-          </div>
-        )}
-
-        <p className="coordinates">
-          GPS :{' '}
-          {place.location.coordinates[1]},{' '}
-          {place.location.coordinates[0]}
-        </p>
-
-        {isOwner && (
-          <button
-            type="button"
-            className="danger-button"
-            onClick={() =>
-              void deletePlace()
-            }
+        {editingPlace &&
+        isOwner ? (
+          <form
+            className="form"
+            onSubmit={savePlace}
           >
-            Supprimer le lieu
-          </button>
+            <label>
+              Nom
+              <input
+                value={editForm.name}
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    name:
+                      event.target.value,
+                  })
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Adresse
+              <input
+                value={
+                  editForm.address
+                }
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    address:
+                      event.target.value,
+                  })
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Ville
+              <input
+                value={editForm.city}
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    city:
+                      event.target.value,
+                  })
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Pays
+              <input
+                value={
+                  editForm.country
+                }
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    country:
+                      event.target.value,
+                  })
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Catégorie
+              <input
+                value={
+                  editForm.category
+                }
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    category:
+                      event.target.value,
+                  })
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Description
+              <textarea
+                rows={4}
+                value={
+                  editForm.description
+                }
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    description:
+                      event.target.value,
+                  })
+                }
+              />
+            </label>
+
+            <label>
+              Niveau de prix
+              <select
+                value={
+                  editForm.priceLevel
+                }
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    priceLevel:
+                      event.target.value,
+                  })
+                }
+              >
+                <option value="">
+                  Non renseigné
+                </option>
+
+                <option value="1">
+                  €
+                </option>
+
+                <option value="2">
+                  €€
+                </option>
+
+                <option value="3">
+                  €€€
+                </option>
+
+                <option value="4">
+                  €€€€
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Tags
+              <input
+                placeholder="culture, musée, famille"
+                value={editForm.tags}
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    tags:
+                      event.target.value,
+                  })
+                }
+              />
+            </label>
+
+            <label>
+              Latitude
+              <input
+                type="number"
+                step="any"
+                value={
+                  editForm.latitude
+                }
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    latitude:
+                      event.target.value,
+                  })
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Longitude
+              <input
+                type="number"
+                step="any"
+                value={
+                  editForm.longitude
+                }
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+                    longitude:
+                      event.target.value,
+                  })
+                }
+                required
+              />
+            </label>
+
+            <div className="inline-form">
+              <button
+                type="submit"
+                disabled={savingPlace}
+              >
+                {savingPlace
+                  ? 'Enregistrement...'
+                  : 'Enregistrer'}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={savingPlace}
+                onClick={
+                  cancelPlaceEdit
+                }
+              >
+                Annuler
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <p>
+              {place.description}
+            </p>
+
+            <div className="place-meta">
+              <span>
+                <strong>
+                  Prix :
+                </strong>{' '}
+                {place.priceLevel
+                  ? '€'.repeat(
+                      place.priceLevel,
+                    )
+                  : 'Non renseigné'}
+              </span>
+
+              <span>
+                <strong>
+                  Note :
+                </strong>{' '}
+                {place.ratingAverage.toFixed(
+                  1,
+                )}
+                /5
+              </span>
+            </div>
+
+            {place.tags.length >
+              0 && (
+              <div className="tags">
+                {place.tags.map(
+                  (tag) => (
+                    <span
+                      key={tag}
+                      className="tag"
+                    >
+                      {tag}
+                    </span>
+                  ),
+                )}
+              </div>
+            )}
+
+            <p className="coordinates">
+              GPS :{' '}
+              {
+                place.location
+                  .coordinates[1]
+              }
+              ,{' '}
+              {
+                place.location
+                  .coordinates[0]
+              }
+            </p>
+
+            {isOwner && (
+              <button
+                type="button"
+                className="danger-button"
+                onClick={() =>
+                  void deletePlace()
+                }
+              >
+                Supprimer le lieu
+              </button>
+            )}
+          </>
         )}
       </section>
 
@@ -625,7 +1034,8 @@ export default function PlaceDetailsPage() {
               onChange={(event) =>
                 setPhotoForm({
                   ...photoForm,
-                  url: event.target.value,
+                  url:
+                    event.target.value,
                 })
               }
               required
@@ -633,7 +1043,9 @@ export default function PlaceDetailsPage() {
 
             <input
               placeholder="Légende"
-              value={photoForm.caption}
+              value={
+                photoForm.caption
+              }
               onChange={(event) =>
                 setPhotoForm({
                   ...photoForm,
@@ -717,15 +1129,19 @@ export default function PlaceDetailsPage() {
               <option value="5">
                 5 - Excellent
               </option>
+
               <option value="4">
                 4 - Très bien
               </option>
+
               <option value="3">
                 3 - Bien
               </option>
+
               <option value="2">
                 2 - Moyen
               </option>
+
               <option value="1">
                 1 - Mauvais
               </option>
